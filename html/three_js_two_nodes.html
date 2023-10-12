@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nodes with Hover Notes</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Replace with the path to your OrbitControls.js -->
+    <script src="./OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+		
+    </style>
+</head>
+<body>
+<script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+	// the 0.1 is the size of the sphere
+    const sphereGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+    const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+	
+	// the fourier series
+	const integrate = (f, a, b, n=1000) => {
+		const h = (b - a) / n;
+		let sum = 0.5 * (f(a) + f(b)); // trapezoidal rule
+		for (let i = 1; i < n; i++) {
+			sum += f(a + h * i);
+		}
+		return sum * h;
+	};
+
+	const fourierCoefficients = (f, N) => {
+		const T = 2 * Math.PI;
+		let a = [];
+		let b = [];
+
+		a[0] = (1/T) * integrate(f, -Math.PI, Math.PI);
+
+		for (let n = 1; n <= N; n++) {
+			a[n] = (2/T) * integrate((t) => f(t) * Math.cos(n * t), -Math.PI, Math.PI);
+			b[n] = (2/T) * integrate((t) => f(t) * Math.sin(n * t), -Math.PI, Math.PI);
+		}
+
+		return {a, b};
+	};
+
+	const fourierSeries = (f, N, t) => {
+		const { a, b } = fourierCoefficients(f, N);
+		let sum = a[0] / 2;
+
+		for (let n = 1; n <= N; n++) {
+			sum += a[n] * Math.cos(n * t) + b[n] * Math.sin(n * t);
+		}
+
+		return sum;
+	};
+
+	// Example usage:
+	const f = (t) => t;  // function f(t) = t
+	const N = 10;  // number of terms
+	const tVal = 2;
+	console.log(fourierSeries(f, N, tVal));  // evaluates the Fourier series of f(t) = t at t = 1 with 10 terms
+
+
+    // Define nodes with positions and notes
+    const nodesData = [
+        { position: [-2, 0, 0], note: 'This is node 1' },
+		{ position: [2, 2, -2], note: 'This is node 5' },
+        { position: [2, 0, 0], note: 'This is node 2' },
+		{ position: [2, 2, 0], note: 'This is node 3' },
+		{ position: [2, 2, 2], note: 'This is node 4' },
+        // Add more nodes as required
+        // { position: [x, y, z], note: 'Your note here' }
+    ];
+
+    const nodes = nodesData.map(data => {
+        const node = new THREE.Mesh(sphereGeometry, material);
+        node.position.set(...data.position);
+        scene.add(node);
+        return node;
+    });
+
+    nodes.forEach((node, idx, array) => {
+        if (idx < array.length - 1) {
+            const lineGeometry = new THREE.BufferGeometry().setFromPoints([node.position, array[idx + 1].position]);
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+            const line = new THREE.Line(lineGeometry, lineMaterial);
+            scene.add(line);
+        }
+    });
+
+    camera.position.z = 5;
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    const note = document.createElement('div');
+    note.style.position = 'absolute';
+    note.style.background = 'rgba(255, 255, 255, 0.7)';
+    note.style.padding = '5px';
+    note.style.borderRadius = '5px';
+    note.style.display = 'none';
+    document.body.appendChild(note);
+
+    renderer.domElement.addEventListener('mousemove', onMouseMove, false);
+
+    function onMouseMove(event) {
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+
+        const intersects = raycaster.intersectObjects(nodes);
+
+        if (intersects.length > 0) {
+            const intersectedNode = intersects[0].object;
+            const nodeData = nodesData[nodes.indexOf(intersectedNode)];
+            note.innerHTML = nodeData.note;
+            note.style.display = 'block';
+            note.style.left = event.clientX + 'px';
+            note.style.top = event.clientY + 'px';
+        } else {
+            note.style.display = 'none';
+        }
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', function() {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        renderer.setSize(width, height);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+    });
+</script>
+</body>
+</html>
